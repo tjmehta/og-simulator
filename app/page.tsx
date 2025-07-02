@@ -13,6 +13,23 @@ export async function generateMetadata({ searchParams }: {
   const siteName = params.site_name as string || 'OG Simulator'
   const delay = params.delay as string || '0'
 
+  // Handle meta tags from arrays
+  const metaTagNames = Array.isArray(params.meta_tag_name) ? params.meta_tag_name : (params.meta_tag_name ? [params.meta_tag_name] : [])
+  const metaTagValues = Array.isArray(params.meta_tag_value) ? params.meta_tag_value : (params.meta_tag_value ? [params.meta_tag_value] : [])
+
+  // Build meta tags object
+  const customMetaTags: { [key: string]: string } = {}
+  for (let i = 0; i < Math.max(metaTagNames.length, metaTagValues.length); i++) {
+    const name = metaTagNames[i] as string || ''
+    const value = metaTagValues[i] as string || ''
+    if (name && value) {
+      customMetaTags[name] = value
+    }
+  }
+
+  // Override siteName with custom meta tag if present
+  const finalSiteName = customMetaTags['og:site_name'] || siteName
+
   // Add page delay if specified
   if (delay && parseInt(delay) > 0) {
     await new Promise(resolve => setTimeout(resolve, parseInt(delay) * 1000))
@@ -81,23 +98,44 @@ export async function generateMetadata({ searchParams }: {
     }
   }
 
+  // Build openGraph object with custom meta tags
+  const openGraphData: any = {
+    title: customMetaTags['og:title'] || title,
+    description: customMetaTags['og:description'] || description,
+    url: customMetaTags['og:url'] || url,
+    siteName: finalSiteName,
+    type: customMetaTags['og:type'] || 'website',
+    ...(imageUrls.length > 0 && { images: imageUrls.map(url => ({ url })) }),
+  }
+
+  // Add locale if specified
+  if (customMetaTags['og:locale']) {
+    openGraphData.locale = customMetaTags['og:locale']
+  }
+
+  // Build twitter card data with custom meta tags
+  const twitterData: any = {
+    card: customMetaTags['twitter:card'] || 'summary_large_image',
+    title: customMetaTags['twitter:title'] || title,
+    description: customMetaTags['twitter:description'] || description,
+    ...(imageUrls.length > 0 && { images: imageUrls }),
+  }
+
+  // Build other meta tags
+  const otherMetaTags: any = {}
+  Object.entries(customMetaTags).forEach(([name, value]) => {
+    // Skip meta tags that are already handled by openGraph and twitter
+    if (!name.startsWith('og:') && !name.startsWith('twitter:')) {
+      otherMetaTags[name] = value
+    }
+  })
+
   return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      url,
-      siteName,
-      type: 'website',
-      ...(imageUrls.length > 0 && { images: imageUrls.map(url => ({ url })) }),
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      ...(imageUrls.length > 0 && { images: imageUrls }),
-    },
+    title: customMetaTags['og:title'] || title,
+    description: customMetaTags['og:description'] || description,
+    openGraph: openGraphData,
+    twitter: twitterData,
+    other: otherMetaTags,
   }
 }
 

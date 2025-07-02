@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
@@ -33,29 +32,10 @@ export default function OGSimulatorClientNew() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [delay, setDelay] = useState([0])
-  const [images, setImages] = useState<ImageConfig[]>([])
-  const [metaTags, setMetaTags] = useState<MetaTag[]>([
-    { id: 'site-name', name: 'og:site_name', value: 'Test Site' }
-  ])
-
-  // Initialize from URL params
-  useEffect(() => {
-    setTitle(searchParams.get('title') || 'Test Page Title')
-    setDescription(searchParams.get('description') || 'Test page description for OG tag generation')
-    setDelay([parseInt(searchParams.get('delay') || '0')])
-
-    // Initialize site_name from URL if present
-    const siteName = searchParams.get('site_name')
-    if (siteName) {
-      setMetaTags(prev => prev.map(tag =>
-        tag.name === 'og:site_name' ? { ...tag, value: siteName } : tag
-      ))
-    }
-
-    // Read array-based image parameters
+  const [title, setTitle] = useState(searchParams.get('title') || 'Test Page Title')
+  const [description, setDescription] = useState(searchParams.get('description') || 'Test page description for OG tag generation')
+  const [delay, setDelay] = useState([parseInt(searchParams.get('delay') || '0')])
+  const [images, setImages] = useState<ImageConfig[]>(() => {
     const imageUrls = searchParams.getAll('image')
     const imageTypes = searchParams.getAll('image_type')
     const imageDelays = searchParams.getAll('image_delay')
@@ -63,46 +43,63 @@ export default function OGSimulatorClientNew() {
     const imageHeights = searchParams.getAll('image_height')
     const imageSizes = searchParams.getAll('image_size')
 
-    if (imageUrls.length > 0 || imageTypes.length > 0) {
-      const maxLength = Math.max(
-        imageUrls.length,
-        imageTypes.length,
-        imageDelays.length,
-        imageWidths.length,
-        imageHeights.length,
-        imageSizes.length
-      )
+    if (imageUrls.length === 0 && imageTypes.length === 0) return []
 
-      const newImages: ImageConfig[] = []
-      for (let i = 0; i < maxLength; i++) {
-        const imageUrl = imageUrls[i] || ''
-        const imageType = imageTypes[i] as 'generate' | 'external' || 'generate'
-        const imageDelay = parseFloat(imageDelays[i] || '0')
-        const imageWidth = imageWidths[i] || ''
-        const imageHeight = imageHeights[i] || ''
-        const imageSize = imageSizes[i] || ''
+    const maxLength = Math.max(imageUrls.length, imageTypes.length, imageDelays.length, imageWidths.length, imageHeights.length, imageSizes.length)
+    const initialImages: ImageConfig[] = []
 
-        // Skip if no relevant data
-        if (!imageUrl && !imageWidth && !imageHeight && !imageSize && imageType !== 'generate') {
-          continue
-        }
+    for (let i = 0; i < maxLength; i++) {
+      const imageUrl = imageUrls[i] || ''
+      const imageType = imageTypes[i] as 'generate' | 'external' || 'generate'
+      const imageDelay = parseFloat(imageDelays[i] || '0')
+      const imageWidth = imageWidths[i] || ''
+      const imageHeight = imageHeights[i] || ''
+      const imageSize = imageSizes[i] || ''
 
-        newImages.push({
-          id: `img-${i}-${Date.now()}`,
-          type: imageType,
-          url: imageUrl || undefined,
-          width: imageWidth || undefined,
-          height: imageHeight || undefined,
-          size: imageSize || undefined,
-          delay: imageDelay
+      if (!imageUrl && !imageWidth && !imageHeight && !imageSize && imageType !== 'generate') continue
+
+      initialImages.push({
+        id: `img-${i}-${Date.now()}`,
+        type: imageType,
+        url: imageUrl || undefined,
+        width: imageWidth || undefined,
+        height: imageHeight || undefined,
+        size: imageSize || undefined,
+        delay: imageDelay
+      })
+    }
+    return initialImages
+  })
+  const [metaTags, setMetaTags] = useState<MetaTag[]>(() => {
+    const metaTagNames = searchParams.getAll('meta_tag_name')
+    const metaTagValues = searchParams.getAll('meta_tag_value')
+    const siteName = searchParams.get('site_name')
+
+    const urlMetaTags: MetaTag[] = []
+    for (let i = 0; i < Math.max(metaTagNames.length, metaTagValues.length); i++) {
+      const name = metaTagNames[i] || ''
+      const value = metaTagValues[i] || ''
+      if (name && value) {
+        urlMetaTags.push({
+          id: `meta-${i}-${Date.now()}`,
+          name,
+          value
         })
       }
-
-      if (newImages.length > 0) {
-        setImages(newImages)
-      }
     }
-  }, [searchParams])
+
+    if (siteName && !urlMetaTags.some(tag => tag.name === 'og:site_name')) {
+      urlMetaTags.push({
+        id: 'site-name-compat',
+        name: 'og:site_name',
+        value: siteName
+      })
+    }
+
+    return urlMetaTags.length > 0 ? urlMetaTags : [{ id: 'site-name', name: 'og:site_name', value: 'Test Site' }]
+  })
+
+
 
   // Update browser URL as form changes
   useEffect(() => {
@@ -112,7 +109,15 @@ export default function OGSimulatorClientNew() {
     if (description) params.set('description', description)
     if (delay[0] > 0) params.set('delay', delay[0].toString())
 
-    // Add site_name from meta tags if present
+    // Add all meta tags as arrays
+    metaTags.forEach((tag) => {
+      if (tag.name && tag.value) {
+        params.append('meta_tag_name', tag.name)
+        params.append('meta_tag_value', tag.value)
+      }
+    })
+
+    // Also add site_name for backward compatibility
     const siteNameTag = metaTags.find(tag => tag.name === 'og:site_name')
     if (siteNameTag?.value) params.set('site_name', siteNameTag.value)
 
@@ -139,9 +144,40 @@ export default function OGSimulatorClientNew() {
       }
     })
 
-    // Update browser URL without causing a page reload
-    const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname
-    window.history.replaceState({}, '', newUrl)
+    // Compare current URL params with new params (order-independent)
+    const currentParams = new URLSearchParams(window.location.search)
+    const currentParamsObject: { [key: string]: string[] } = {}
+    const newParamsObject: { [key: string]: string[] } = {}
+
+    // Build current params object
+    for (const [key, value] of currentParams.entries()) {
+      if (!currentParamsObject[key]) currentParamsObject[key] = []
+      currentParamsObject[key].push(value)
+    }
+
+    // Build new params object
+    for (const [key, value] of params.entries()) {
+      if (!newParamsObject[key]) newParamsObject[key] = []
+      newParamsObject[key].push(value)
+    }
+
+    // Sort arrays for comparison (order doesn't matter)
+    for (const key in currentParamsObject) {
+      currentParamsObject[key].sort()
+    }
+    for (const key in newParamsObject) {
+      newParamsObject[key].sort()
+    }
+
+    // Check if params have actually changed
+    const paramsChanged = JSON.stringify(currentParamsObject) !== JSON.stringify(newParamsObject)
+
+    // Update browser URL only if params changed
+    if (paramsChanged) {
+      const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname
+      window.history.replaceState({}, '', newUrl)
+    }
+
   }, [title, description, delay, images, metaTags])
 
   // Image management functions
@@ -171,16 +207,19 @@ export default function OGSimulatorClientNew() {
       name: '',
       value: ''
     }
+
     setMetaTags(prev => [...prev, newTag])
   }
 
   const updateMetaTag = (id: string, updates: Partial<MetaTag>) => {
+
     setMetaTags(prev => prev.map(tag =>
       tag.id === id ? { ...tag, ...updates } : tag
     ))
   }
 
   const removeMetaTag = (id: string) => {
+
     setMetaTags(prev => prev.filter(tag => tag.id !== id))
   }
 
@@ -214,7 +253,15 @@ export default function OGSimulatorClientNew() {
     if (description) params.set('description', description)
     if (delay[0] > 0) params.set('delay', delay[0].toString())
 
-    // Add site_name from meta tags if present
+    // Add all meta tags as arrays
+    metaTags.forEach((tag) => {
+      if (tag.name && tag.value) {
+        params.append('meta_tag_name', tag.name)
+        params.append('meta_tag_value', tag.value)
+      }
+    })
+
+    // Also add site_name for backward compatibility
     const siteNameTag = metaTags.find(tag => tag.name === 'og:site_name')
     if (siteNameTag?.value) params.set('site_name', siteNameTag.value)
 
@@ -543,6 +590,10 @@ export default function OGSimulatorClientNew() {
                     onClick={() => {
                       setTitle('Amazing Product')
                       setDescription('Discover our groundbreaking new product that will transform the way you work, play, and connect. Join thousands of satisfied customers who have already experienced the future.')
+                      console.log('setMetaTags', [
+                        { id: 'site-name', name: 'og:site_name', value: 'TechCorp' },
+                        { id: 'type', name: 'og:type', value: 'website' }
+                      ])
                       setMetaTags([
                         { id: 'site-name', name: 'og:site_name', value: 'TechCorp' },
                         { id: 'type', name: 'og:type', value: 'website' }
@@ -577,6 +628,9 @@ export default function OGSimulatorClientNew() {
                     onClick={() => {
                       setTitle('')
                       setDescription('')
+                      console.log('setMetaTags', [
+                        { id: 'site-name', name: 'og:site_name', value: 'Test Site' }
+                      ])
                       setMetaTags([
                         { id: 'site-name', name: 'og:site_name', value: 'Test Site' }
                       ])
@@ -800,8 +854,6 @@ ${images.length > 0 && getImageUrl(images[0], true) ? `<meta name="twitter:image
                 </CardContent>
               </Card>
             )}
-
-
           </div>
         </div>
       </div>
