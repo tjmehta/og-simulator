@@ -11,7 +11,7 @@ export async function generateMetadata({ searchParams }: {
   const description = params.description as string || 'Test and preview your Open Graph meta tags'
   const url = params.url as string || ''
   const siteName = params.site_name as string || 'OG Simulator'
-  const delay = params.delay as string || '0'
+  const delay = parseInt(params.delay as string || '0')
 
   // Handle meta tags from arrays
   const metaTagNames = Array.isArray(params.meta_tag_name) ? params.meta_tag_name : (params.meta_tag_name ? [params.meta_tag_name] : [])
@@ -31,8 +31,8 @@ export async function generateMetadata({ searchParams }: {
   const finalSiteName = customMetaTags['og:site_name'] || siteName
 
   // Add page delay if specified
-  if (delay && parseInt(delay) > 0) {
-    await new Promise(resolve => setTimeout(resolve, parseInt(delay) * 1000))
+  if (delay > 0) {
+    await new Promise(resolve => setTimeout(resolve, delay))
   }
 
   // Get the current host for absolute URLs

@@ -228,12 +228,12 @@ export default function OGSimulatorClientNew() {
 
     if (image.type === 'external' && image.url) {
       if (image.delay > 0) {
-        return `${baseUrl}/api/image-proxy?url=${encodeURIComponent(image.url)}&delay=${image.delay * 1000}`
+        return `${baseUrl}/api/image-proxy?url=${encodeURIComponent(image.url)}&delay=${image.delay}`
       }
       return absolute ? image.url : image.url
     } else if (image.type === 'generate' && (image.size || image.width || image.height)) {
       const params = new URLSearchParams()
-      params.set('delay', (image.delay * 1000).toString())
+      params.set('delay', (image.delay).toString())
       if (image.size && image.size !== 'custom') {
         params.set('size', image.size)
       } else {
