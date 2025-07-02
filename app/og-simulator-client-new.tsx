@@ -23,39 +23,126 @@ interface ImageConfig {
   delay: number
 }
 
+interface MetaTag {
+  id: string
+  name: string
+  value: string
+}
+
 export default function OGSimulatorClientNew() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [siteName, setSiteName] = useState('')
   const [delay, setDelay] = useState([0])
   const [images, setImages] = useState<ImageConfig[]>([])
+  const [metaTags, setMetaTags] = useState<MetaTag[]>([
+    { id: 'site-name', name: 'og:site_name', value: 'Test Site' }
+  ])
 
   // Initialize from URL params
   useEffect(() => {
     setTitle(searchParams.get('title') || 'Test Page Title')
     setDescription(searchParams.get('description') || 'Test page description for OG tag generation')
-    setSiteName(searchParams.get('site_name') || 'Test Site')
     setDelay([parseInt(searchParams.get('delay') || '0')])
 
-    // Convert legacy URL params to images array if we have image data
-    const hasImageUrl = searchParams.get('image')
-    const hasGenerationParams = searchParams.get('image_width') || searchParams.get('image_height') || searchParams.get('image_size')
+    // Initialize site_name from URL if present
+    const siteName = searchParams.get('site_name')
+    if (siteName) {
+      setMetaTags(prev => prev.map(tag =>
+        tag.name === 'og:site_name' ? { ...tag, value: siteName } : tag
+      ))
+    }
 
-    if (hasImageUrl || hasGenerationParams) {
-      setImages([{
-        id: 'legacy',
-        type: hasImageUrl ? 'external' : 'generate',
-        url: searchParams.get('image') || undefined,
-        width: searchParams.get('image_width') || undefined,
-        height: searchParams.get('image_height') || undefined,
-        size: searchParams.get('image_size') || undefined,
-        delay: parseInt(searchParams.get('image_delay') || '0') / 1000 // Convert from ms to seconds
-      }])
+    // Read array-based image parameters
+    const imageUrls = searchParams.getAll('image')
+    const imageTypes = searchParams.getAll('image_type')
+    const imageDelays = searchParams.getAll('image_delay')
+    const imageWidths = searchParams.getAll('image_width')
+    const imageHeights = searchParams.getAll('image_height')
+    const imageSizes = searchParams.getAll('image_size')
+
+    if (imageUrls.length > 0 || imageTypes.length > 0) {
+      const maxLength = Math.max(
+        imageUrls.length,
+        imageTypes.length,
+        imageDelays.length,
+        imageWidths.length,
+        imageHeights.length,
+        imageSizes.length
+      )
+
+      const newImages: ImageConfig[] = []
+      for (let i = 0; i < maxLength; i++) {
+        const imageUrl = imageUrls[i] || ''
+        const imageType = imageTypes[i] as 'generate' | 'external' || 'generate'
+        const imageDelay = parseFloat(imageDelays[i] || '0')
+        const imageWidth = imageWidths[i] || ''
+        const imageHeight = imageHeights[i] || ''
+        const imageSize = imageSizes[i] || ''
+
+        // Skip if no relevant data
+        if (!imageUrl && !imageWidth && !imageHeight && !imageSize && imageType !== 'generate') {
+          continue
+        }
+
+        newImages.push({
+          id: `img-${i}-${Date.now()}`,
+          type: imageType,
+          url: imageUrl || undefined,
+          width: imageWidth || undefined,
+          height: imageHeight || undefined,
+          size: imageSize || undefined,
+          delay: imageDelay
+        })
+      }
+
+      if (newImages.length > 0) {
+        setImages(newImages)
+      }
     }
   }, [searchParams])
+
+  // Update browser URL as form changes
+  useEffect(() => {
+    const params = new URLSearchParams()
+
+    if (title) params.set('title', title)
+    if (description) params.set('description', description)
+    if (delay[0] > 0) params.set('delay', delay[0].toString())
+
+    // Add site_name from meta tags if present
+    const siteNameTag = metaTags.find(tag => tag.name === 'og:site_name')
+    if (siteNameTag?.value) params.set('site_name', siteNameTag.value)
+
+    // Add image parameters using arrays
+    images.forEach((image) => {
+      if (image.type === 'external' && image.url) {
+        params.append('image', image.url)
+        params.append('image_type', 'external')
+        params.append('image_delay', image.delay.toString())
+      } else if (image.type === 'generate') {
+        params.append('image', '') // Empty for generated images
+        params.append('image_type', 'generate')
+        params.append('image_delay', image.delay.toString())
+
+        if (image.size && image.size !== 'custom') {
+          params.append('image_size', image.size)
+          params.append('image_width', '')
+          params.append('image_height', '')
+        } else {
+          params.append('image_size', '')
+          params.append('image_width', image.width || '')
+          params.append('image_height', image.height || '')
+        }
+      }
+    })
+
+    // Update browser URL without causing a page reload
+    const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname
+    window.history.replaceState({}, '', newUrl)
+  }, [title, description, delay, images, metaTags])
 
   // Image management functions
   const addImage = () => {
@@ -75,6 +162,26 @@ export default function OGSimulatorClientNew() {
 
   const removeImage = (id: string) => {
     setImages(prev => prev.filter(img => img.id !== id))
+  }
+
+  // Meta tag management functions
+  const addMetaTag = () => {
+    const newTag: MetaTag = {
+      id: `meta-${Date.now()}`,
+      name: '',
+      value: ''
+    }
+    setMetaTags(prev => [...prev, newTag])
+  }
+
+  const updateMetaTag = (id: string, updates: Partial<MetaTag>) => {
+    setMetaTags(prev => prev.map(tag =>
+      tag.id === id ? { ...tag, ...updates } : tag
+    ))
+  }
+
+  const removeMetaTag = (id: string) => {
+    setMetaTags(prev => prev.filter(tag => tag.id !== id))
   }
 
   const getImageUrl = (image: ImageConfig, absolute = false) => {
@@ -99,16 +206,55 @@ export default function OGSimulatorClientNew() {
     return null
   }
 
+  // Helper function to generate the test URL for third-party applications
+  const getTestUrl = () => {
+    const params = new URLSearchParams()
+
+    if (title) params.set('title', title)
+    if (description) params.set('description', description)
+    if (delay[0] > 0) params.set('delay', delay[0].toString())
+
+    // Add site_name from meta tags if present
+    const siteNameTag = metaTags.find(tag => tag.name === 'og:site_name')
+    if (siteNameTag?.value) params.set('site_name', siteNameTag.value)
+
+    // Add image parameters using arrays
+    images.forEach((image) => {
+      if (image.type === 'external' && image.url) {
+        params.append('image', image.url)
+        params.append('image_type', 'external')
+        params.append('image_delay', image.delay.toString())
+      } else if (image.type === 'generate') {
+        params.append('image', '') // Empty for generated images
+        params.append('image_type', 'generate')
+        params.append('image_delay', image.delay.toString())
+
+        if (image.size && image.size !== 'custom') {
+          params.append('image_size', image.size)
+          params.append('image_width', '')
+          params.append('image_height', '')
+        } else {
+          params.append('image_size', '')
+          params.append('image_width', image.width || '')
+          params.append('image_height', image.height || '')
+        }
+      }
+    })
+
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+    return `${baseUrl}?${params.toString()}`
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
       <div className="container mx-auto max-w-6xl">
         {/* Header */}
         <div className="text-center mb-8 pt-8">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-            OG Tag Simulator (New Multi-Image Version)
+            OG Simulator
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300">
-            Generate test URLs with dynamic OG tags and multiple images
+            Generate test URLs with dynamic OG tags including images
           </p>
         </div>
 
@@ -320,24 +466,87 @@ export default function OGSimulatorClientNew() {
                 ))}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="siteName">Site Name</Label>
-                <Input
-                  id="siteName"
-                  value={siteName}
-                  onChange={(e) => setSiteName(e.target.value)}
-                  placeholder="Your Site Name"
-                  className="w-full"
-                />
+              {/* Meta Tags Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-medium">Meta Tags ({metaTags.length})</Label>
+                  <Button onClick={addMetaTag} size="sm" variant="outline">
+                    ➕ Add Meta Tag
+                  </Button>
+                </div>
+
+                {metaTags.map((tag) => (
+                  <Card key={tag.id} className="border-l-4 border-l-purple-500">
+                    <CardContent className="pt-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-medium">Meta Tag</Label>
+                          <Button
+                            onClick={() => removeMetaTag(tag.id)}
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            🗑️
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3">
+                          <div className="space-y-2">
+                            <Label className="text-sm">Tag Name</Label>
+                            <Select
+                              value={tag.name}
+                              onValueChange={(value) => updateMetaTag(tag.id, { name: value })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select or enter custom tag name" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="og:site_name">og:site_name</SelectItem>
+                                <SelectItem value="og:type">og:type</SelectItem>
+                                <SelectItem value="og:url">og:url</SelectItem>
+                                <SelectItem value="og:locale">og:locale</SelectItem>
+                                <SelectItem value="article:author">article:author</SelectItem>
+                                <SelectItem value="article:published_time">article:published_time</SelectItem>
+                                <SelectItem value="twitter:card">twitter:card</SelectItem>
+                                <SelectItem value="twitter:site">twitter:site</SelectItem>
+                                <SelectItem value="twitter:creator">twitter:creator</SelectItem>
+                                <SelectItem value="custom">Custom Tag Name</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {tag.name === 'custom' && (
+                              <Input
+                                value={tag.name}
+                                onChange={(e) => updateMetaTag(tag.id, { name: e.target.value })}
+                                placeholder="Enter custom tag name (e.g. og:custom)"
+                                className="mt-2"
+                              />
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-sm">Tag Value</Label>
+                            <Input
+                              value={tag.value}
+                              onChange={(e) => updateMetaTag(tag.id, { value: e.target.value })}
+                              placeholder="Enter tag value"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
 
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <Button
                     onClick={() => {
-                      setTitle('Amazing Product Launch - Revolutionary Tech for Everyone')
+                      setTitle('Amazing Product')
                       setDescription('Discover our groundbreaking new product that will transform the way you work, play, and connect. Join thousands of satisfied customers who have already experienced the future.')
-                      setSiteName('TechCorp')
+                      setMetaTags([
+                        { id: 'site-name', name: 'og:site_name', value: 'TechCorp' },
+                        { id: 'type', name: 'og:type', value: 'website' }
+                      ])
                       setDelay([2])
 
                       setImages([
@@ -368,7 +577,9 @@ export default function OGSimulatorClientNew() {
                     onClick={() => {
                       setTitle('')
                       setDescription('')
-                      setSiteName('')
+                      setMetaTags([
+                        { id: 'site-name', name: 'og:site_name', value: 'Test Site' }
+                      ])
                       setDelay([0])
                       setImages([])
                       toast.info('Form cleared')
@@ -385,6 +596,154 @@ export default function OGSimulatorClientNew() {
 
           {/* Preview Panel */}
           <div className="space-y-6">
+            {/* Generated Test URL */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span>🔗</span>
+                  Generated Test URL
+                </CardTitle>
+                <CardDescription>
+                  Use this URL for third-party applications to crawl your OG tags
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium">Test URL:</Label>
+                    <Button
+                      onClick={async () => {
+                        const url = getTestUrl()
+                        await navigator.clipboard.writeText(url)
+                        toast.success('Test URL copied to clipboard!')
+                      }}
+                      size="sm"
+                      variant="outline"
+                    >
+                      📋 Copy URL
+                    </Button>
+                  </div>
+                  <div className="bg-white dark:bg-gray-900 p-3 rounded border text-sm font-mono break-all text-gray-600 dark:text-gray-400 max-h-32 overflow-y-auto">
+                    {getTestUrl()}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    💡 Third-party applications can crawl this URL to extract the dynamic OG tags generated from your parameters
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+                        {/* Social Media Preview */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span>👁️</span>
+                  Social Media Preview
+                </CardTitle>
+                <CardDescription>
+                  How your content will appear when shared (first image)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="border rounded-lg p-4 bg-white dark:bg-gray-800 space-y-3">
+                  {images.length > 0 && getImageUrl(images[0]) && (
+                    <div className="w-full h-48 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden">
+                      <img
+                        src={getImageUrl(images[0]) || ''}
+                        alt="OG Image"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                          const nextElement = e.currentTarget.nextElementSibling as HTMLElement
+                          if (nextElement) {
+                            nextElement.style.display = 'flex'
+                          }
+                        }}
+                      />
+                      <div className="hidden w-full h-full bg-gray-200 dark:bg-gray-700 items-center justify-center text-gray-500">
+                        Image not found
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="font-semibold text-blue-600 dark:text-blue-400 text-sm mb-1">
+                      {metaTags.find(tag => tag.name === 'og:site_name')?.value || 'No site name'}
+                    </div>
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white line-clamp-2">
+                      {title || 'No title provided'}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-300 text-sm mt-1 line-clamp-2">
+                      {description || 'No description provided'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* HTML OG Tags Preview */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span>🏷️</span>
+                  HTML OG Tags Preview
+                </CardTitle>
+                <CardDescription>
+                  Raw HTML meta tags that will be generated for your page
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                  <pre className="whitespace-pre-wrap">
+{`<!-- Basic Meta Tags -->
+<meta property="og:title" content="${title || 'Test Page Title'}" />
+<meta property="og:description" content="${description || 'Test page description for OG tag generation'}" />
+${metaTags.map(tag => `<meta property="${tag.name}" content="${tag.value}" />`).join('\n')}
+
+<!-- Image Meta Tags -->
+${images.map((image, index) => {
+  const imageUrl = getImageUrl(image, true)
+  return imageUrl ? `<meta property="og:image" content="${imageUrl}" />` : ''
+}).filter(Boolean).join('\n')}
+
+<!-- Twitter Card Meta Tags -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="${title || 'Test Page Title'}" />
+<meta name="twitter:description" content="${description || 'Test page description for OG tag generation'}" />
+${images.length > 0 && getImageUrl(images[0], true) ? `<meta name="twitter:image" content="${getImageUrl(images[0], true)}" />` : ''}`}
+                  </pre>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      const metaHtml = `<!-- Basic Meta Tags -->
+<meta property="og:title" content="${title || 'Test Page Title'}" />
+<meta property="og:description" content="${description || 'Test page description for OG tag generation'}" />
+${metaTags.map(tag => `<meta property="${tag.name}" content="${tag.value}" />`).join('\n')}
+
+<!-- Image Meta Tags -->
+${images.map((image, index) => {
+  const imageUrl = getImageUrl(image, true)
+  return imageUrl ? `<meta property="og:image" content="${imageUrl}" />` : ''
+}).filter(Boolean).join('\n')}
+
+<!-- Twitter Card Meta Tags -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="${title || 'Test Page Title'}" />
+<meta name="twitter:description" content="${description || 'Test page description for OG tag generation'}" />
+${images.length > 0 && getImageUrl(images[0], true) ? `<meta name="twitter:image" content="${getImageUrl(images[0], true)}" />` : ''}`
+
+                      await navigator.clipboard.writeText(metaHtml)
+                      toast.success('Meta tags HTML copied to clipboard!')
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    📋 Copy HTML
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Images Preview */}
             {images.length > 0 && (
               <Card>
@@ -442,52 +801,7 @@ export default function OGSimulatorClientNew() {
               </Card>
             )}
 
-            {/* Social Media Preview */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span>👁️</span>
-                  Social Media Preview
-                </CardTitle>
-                <CardDescription>
-                  How your content will appear when shared (first image)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="border rounded-lg p-4 bg-white dark:bg-gray-800 space-y-3">
-                  {images.length > 0 && getImageUrl(images[0]) && (
-                    <div className="w-full h-48 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden">
-                      <img
-                        src={getImageUrl(images[0]) || ''}
-                        alt="OG Image"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none'
-                          const nextElement = e.currentTarget.nextElementSibling as HTMLElement
-                          if (nextElement) {
-                            nextElement.style.display = 'flex'
-                          }
-                        }}
-                      />
-                      <div className="hidden w-full h-full bg-gray-200 dark:bg-gray-700 items-center justify-center text-gray-500">
-                        Image not found
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <div className="font-semibold text-blue-600 dark:text-blue-400 text-sm mb-1">
-                      {siteName}
-                    </div>
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white line-clamp-2">
-                      {title || 'No title provided'}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-300 text-sm mt-1 line-clamp-2">
-                      {description || 'No description provided'}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+
           </div>
         </div>
       </div>
