@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import sharp from 'sharp'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -34,8 +35,8 @@ export async function GET(request: NextRequest) {
       await new Promise(resolve => setTimeout(resolve, delay))
     }
 
-    // Generate SVG placeholder image
-    const svg = `
+    // Create gradient background using Sharp
+    const gradientSvg = `
       <svg width="${finalWidth}" height="${finalHeight}" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -44,20 +45,65 @@ export async function GET(request: NextRequest) {
           </linearGradient>
         </defs>
         <rect width="100%" height="100%" fill="url(#grad)"/>
-        <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="${Math.min(finalWidth, finalHeight) / 20}" font-weight="bold">
-          Generated Image
-        </text>
-        <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, sans-serif" font-size="${Math.min(finalWidth, finalHeight) / 30}">
-          ${finalWidth} × ${finalHeight}
-        </text>
-        ${delay > 0 ? `<text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-family="Arial, sans-serif" font-size="${Math.min(finalWidth, finalHeight) / 40}">Delayed ${delay}ms</text>` : ''}
       </svg>
     `
 
-    return new NextResponse(svg, {
+    // Calculate font sizes based on image dimensions
+    const titleFontSize = Math.min(finalWidth, finalHeight) / 20
+    const sizeFontSize = Math.min(finalWidth, finalHeight) / 30
+    const delayFontSize = Math.min(finalWidth, finalHeight) / 40
+
+    // Create the main title text SVG
+    const titleTextSvg = `
+      <svg width="${finalWidth}" height="${finalHeight}" xmlns="http://www.w3.org/2000/svg">
+        <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" fill="white" 
+              font-family="Arial, sans-serif" font-size="${titleFontSize}" font-weight="bold">
+          Generated Image
+        </text>
+      </svg>
+    `
+
+    // Create the size text SVG
+    const sizeTextSvg = `
+      <svg width="${finalWidth}" height="${finalHeight}" xmlns="http://www.w3.org/2000/svg">
+        <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="rgba(255,255,255,0.8)" 
+              font-family="Arial, sans-serif" font-size="${sizeFontSize}">
+          ${finalWidth} × ${finalHeight}
+        </text>
+      </svg>
+    `
+
+    // Create the delay text SVG if delay is specified
+    const delayTextSvg = delay > 0 ? `
+      <svg width="${finalWidth}" height="${finalHeight}" xmlns="http://www.w3.org/2000/svg">
+        <text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" fill="rgba(255,255,255,0.6)" 
+              font-family="Arial, sans-serif" font-size="${delayFontSize}">
+          Delayed ${delay}ms
+        </text>
+      </svg>
+    ` : null
+
+    // Generate PNG image using Sharp
+    let image = sharp(Buffer.from(gradientSvg))
+      .resize(finalWidth, finalHeight)
+      .png()
+
+    // Composite the text layers on top
+    const compositeOperations = [
+      { input: Buffer.from(titleTextSvg), top: 0, left: 0 },
+      { input: Buffer.from(sizeTextSvg), top: 0, left: 0 }
+    ]
+
+    if (delayTextSvg) {
+      compositeOperations.push({ input: Buffer.from(delayTextSvg), top: 0, left: 0 })
+    }
+
+    const pngBuffer = await image.composite(compositeOperations).png().toBuffer()
+
+    return new NextResponse(pngBuffer, {
       status: 200,
       headers: {
-        'Content-Type': 'image/svg+xml',
+        'Content-Type': 'image/png',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
