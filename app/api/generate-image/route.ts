@@ -35,72 +35,112 @@ export async function GET(request: NextRequest) {
       await new Promise(resolve => setTimeout(resolve, delay))
     }
 
-    // Create gradient background using Sharp
-    const gradientSvg = `
-      <svg width="${finalWidth}" height="${finalHeight}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-          </linearGradient>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grad)"/>
-      </svg>
-    `
+    // Create gradient effect using multiple colored rectangles
+    // This completely avoids SVG and fontconfig dependencies
+    
+    const gradientSteps = 10
+    const stepHeight = Math.ceil(finalHeight / gradientSteps)
+    
+    // Create base image with solid color
+    let baseImage = sharp({
+      create: {
+        width: finalWidth,
+        height: finalHeight,
+        channels: 3,
+        background: { r: 102, g: 126, b: 234 } // Start color #667eea
+      }
+    })
 
-    // Calculate font sizes based on image dimensions
-    const titleFontSize = Math.min(finalWidth, finalHeight) / 20
-    const sizeFontSize = Math.min(finalWidth, finalHeight) / 30
-    const delayFontSize = Math.min(finalWidth, finalHeight) / 40
+    // Create gradient effect by overlaying rectangles with varying opacity
+    const overlays = []
+    for (let i = 0; i < gradientSteps; i++) {
+      const progress = i / (gradientSteps - 1)
+      // Interpolate between start color (102, 126, 234) and end color (118, 75, 162)
+      const r = Math.round(102 + (118 - 102) * progress)
+      const g = Math.round(126 + (75 - 126) * progress)
+      const b = Math.round(234 + (162 - 234) * progress)
+      
+      const stepImage = await sharp({
+        create: {
+          width: finalWidth,
+          height: stepHeight,
+          channels: 3,
+          background: { r, g, b }
+        }
+      }).png().toBuffer()
 
-    // Create the main title text SVG
-    const titleTextSvg = `
-      <svg width="${finalWidth}" height="${finalHeight}" xmlns="http://www.w3.org/2000/svg">
-        <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" fill="white" 
-              font-family="Arial, sans-serif" font-size="${titleFontSize}" font-weight="bold">
-          Generated Image
-        </text>
-      </svg>
-    `
-
-    // Create the size text SVG
-    const sizeTextSvg = `
-      <svg width="${finalWidth}" height="${finalHeight}" xmlns="http://www.w3.org/2000/svg">
-        <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="rgba(255,255,255,0.8)" 
-              font-family="Arial, sans-serif" font-size="${sizeFontSize}">
-          ${finalWidth} × ${finalHeight}
-        </text>
-      </svg>
-    `
-
-    // Create the delay text SVG if delay is specified
-    const delayTextSvg = delay > 0 ? `
-      <svg width="${finalWidth}" height="${finalHeight}" xmlns="http://www.w3.org/2000/svg">
-        <text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" fill="rgba(255,255,255,0.6)" 
-              font-family="Arial, sans-serif" font-size="${delayFontSize}">
-          Delayed ${delay}ms
-        </text>
-      </svg>
-    ` : null
-
-    // Generate PNG image using Sharp
-    let image = sharp(Buffer.from(gradientSvg))
-      .resize(finalWidth, finalHeight)
-      .png()
-
-    // Composite the text layers on top
-    const compositeOperations = [
-      { input: Buffer.from(titleTextSvg), top: 0, left: 0 },
-      { input: Buffer.from(sizeTextSvg), top: 0, left: 0 }
-    ]
-
-    if (delayTextSvg) {
-      compositeOperations.push({ input: Buffer.from(delayTextSvg), top: 0, left: 0 })
+      overlays.push({
+        input: stepImage,
+        top: i * stepHeight,
+        left: 0
+      })
     }
 
-    const pngBuffer = await image.composite(compositeOperations).png().toBuffer()
+    // Apply gradient overlays
+    if (overlays.length > 0) {
+      baseImage = baseImage.composite(overlays)
+    }
 
-    return new NextResponse(pngBuffer, {
+    // Add simple geometric shapes to represent text areas
+    const centerX = Math.round(finalWidth / 2)
+    const titleY = Math.round(finalHeight * 0.4)
+    const sizeY = Math.round(finalHeight * 0.55)
+    const delayY = Math.round(finalHeight * 0.7)
+
+    // Create text placeholder rectangles
+    const titleRect = await sharp({
+      create: {
+        width: Math.min(Math.round(finalWidth * 0.6), 400),
+        height: Math.round(finalHeight * 0.08),
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 0.9 }
+      }
+    }).png().toBuffer()
+
+    const sizeRect = await sharp({
+      create: {
+        width: Math.min(Math.round(finalWidth * 0.4), 250),
+        height: Math.round(finalHeight * 0.06),
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 0.7 }
+      }
+    }).png().toBuffer()
+
+    const compositeOps = [
+      {
+        input: titleRect,
+        top: titleY,
+        left: centerX - Math.round(Math.min(finalWidth * 0.6, 400) / 2)
+      },
+      {
+        input: sizeRect,
+        top: sizeY,
+        left: centerX - Math.round(Math.min(finalWidth * 0.4, 250) / 2)
+      }
+    ]
+
+    // Add delay indicator if specified
+    if (delay > 0) {
+      const delayRect = await sharp({
+        create: {
+          width: Math.min(Math.round(finalWidth * 0.3), 180),
+          height: Math.round(finalHeight * 0.04),
+          channels: 4,
+          background: { r: 255, g: 255, b: 255, alpha: 0.5 }
+        }
+      }).png().toBuffer()
+
+      compositeOps.push({
+        input: delayRect,
+        top: delayY,
+        left: centerX - Math.round(Math.min(finalWidth * 0.3, 180) / 2)
+      })
+    }
+
+    // Composite all elements
+    const finalImage = await baseImage.composite(compositeOps).png().toBuffer()
+
+    return new NextResponse(finalImage, {
       status: 200,
       headers: {
         'Content-Type': 'image/png',
