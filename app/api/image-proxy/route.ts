@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   try {
     // Add delay if specified
     if (delay > 0) {
-      await new Promise(resolve => setTimeout(resolve, delay))
+      await new Promise(resolve => setTimeout(resolve, delay * 1000))
     }
 
     // Fetch the original image

@@ -32,7 +32,7 @@ export async function generateMetadata({ searchParams }: {
 
   // Add page delay if specified
   if (delay > 0) {
-    await new Promise(resolve => setTimeout(resolve, delay))
+    await new Promise(resolve => setTimeout(resolve, delay * 1000))
   }
 
   // Get the current host for absolute URLs
