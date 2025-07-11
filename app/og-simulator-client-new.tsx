@@ -20,6 +20,7 @@ interface ImageConfig {
   height?: string
   size?: string
   delay: number
+  tags: string[]
 }
 
 interface MetaTag {
@@ -65,7 +66,8 @@ export default function OGSimulatorClientNew() {
         width: imageWidth || undefined,
         height: imageHeight || undefined,
         size: imageSize || undefined,
-        delay: imageDelay
+        delay: imageDelay,
+        tags: i === 0 ? ['og:image', 'twitter:image'] : []
       })
     }
     return initialImages
@@ -185,7 +187,8 @@ export default function OGSimulatorClientNew() {
     const newImage: ImageConfig = {
       id: `img-${Date.now()}`,
       type: 'generate',
-      delay: 0
+      delay: 0,
+      tags: []
     }
     setImages(prev => [...prev, newImage])
   }
@@ -481,6 +484,50 @@ export default function OGSimulatorClientNew() {
                         />
                       </div>
 
+                      {/* OG Tags Selection */}
+                      <div className="space-y-2">
+                        <Label className="text-sm">OG Tags ({image.tags.length} selected)</Label>
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            {[
+                              { value: 'og:image', label: 'og:image' },
+                              { value: 'twitter:image', label: 'twitter:image' },
+                              { value: 'favicon', label: 'favicon' },
+                              { value: 'icon', label: 'icon' },
+                              { value: 'apple-touch-icon', label: 'apple-touch-icon' },
+                              { value: 'none', label: 'none' }
+                            ].map((option) => (
+                              <div key={option.value} className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  id={`${image.id}-${option.value}`}
+                                  checked={image.tags.includes(option.value)}
+                                  onChange={(e) => {
+                                    const newTags = e.target.checked
+                                      ? [...image.tags, option.value]
+                                      : image.tags.filter(tag => tag !== option.value)
+                                    updateImage(image.id, { tags: newTags })
+                                  }}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <Label htmlFor={`${image.id}-${option.value}`} className="text-xs cursor-pointer">
+                                  {option.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                          {image.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {image.tags.map((tag) => (
+                                <Badge key={tag} variant="secondary" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Image URL Preview */}
                       {getImageUrl(image) && (
                         <div className="space-y-2">
@@ -607,13 +654,15 @@ export default function OGSimulatorClientNew() {
                           width: '1200',
                           height: '630',
                           size: 'custom',
-                          delay: 1
+                          delay: 1,
+                          tags: ['og:image', 'twitter:image']
                         },
                         {
                           id: 'sample-2',
                           type: 'external',
                           url: 'https://picsum.photos/800/400',
-                          delay: 0.5
+                          delay: 0.5,
+                          tags: []
                         }
                       ])
 
@@ -695,30 +744,33 @@ export default function OGSimulatorClientNew() {
                   Social Media Preview
                 </CardTitle>
                 <CardDescription>
-                  How your content will appear when shared (first image)
+                  How your content will appear when shared (first image with og:image or twitter:image tag)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="border rounded-lg p-4 bg-white dark:bg-gray-800 space-y-3">
-                  {images.length > 0 && getImageUrl(images[0]) && (
-                    <div className="w-full h-48 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden">
-                      <img
-                        src={getImageUrl(images[0]) || ''}
-                        alt="OG Image"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none'
-                          const nextElement = e.currentTarget.nextElementSibling as HTMLElement
-                          if (nextElement) {
-                            nextElement.style.display = 'flex'
-                          }
-                        }}
-                      />
-                      <div className="hidden w-full h-full bg-gray-200 dark:bg-gray-700 items-center justify-center text-gray-500">
-                        Image not found
+                  {(() => {
+                    const previewImage = images.find(img => img.tags.includes('og:image') || img.tags.includes('twitter:image'))
+                    return previewImage && getImageUrl(previewImage) ? (
+                      <div className="w-full h-48 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden">
+                        <img
+                          src={getImageUrl(previewImage) || ''}
+                          alt="OG Image"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                            const nextElement = e.currentTarget.nextElementSibling as HTMLElement
+                            if (nextElement) {
+                              nextElement.style.display = 'flex'
+                            }
+                          }}
+                        />
+                        <div className="hidden w-full h-full bg-gray-200 dark:bg-gray-700 items-center justify-center text-gray-500">
+                          Image not found
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ) : null
+                  })()}
                   <div>
                     <div className="font-semibold text-blue-600 dark:text-blue-400 text-sm mb-1">
                       {metaTags.find(tag => tag.name === 'og:site_name')?.value || 'No site name'}
@@ -756,14 +808,30 @@ ${metaTags.map(tag => `<meta property="${tag.name}" content="${tag.value}" />`).
 <!-- Image Meta Tags -->
 ${images.map((image, index) => {
   const imageUrl = getImageUrl(image, true)
-  return imageUrl ? `<meta property="og:image" content="${imageUrl}" />` : ''
+  if (!imageUrl) return ''
+  
+  return image.tags.map(tag => {
+    if (tag === 'og:image') {
+      return `<meta property="og:image" content="${imageUrl}" />`
+    } else if (tag === 'twitter:image') {
+      return `<meta name="twitter:image" content="${imageUrl}" />`
+    } else if (tag === 'favicon') {
+      return `<link rel="icon" type="image/png" href="${imageUrl}" />`
+    } else if (tag === 'icon') {
+      return `<link rel="icon" type="image/png" href="${imageUrl}" />`
+    } else if (tag === 'apple-touch-icon') {
+      return `<link rel="apple-touch-icon" href="${imageUrl}" />`
+    } else if (tag === 'none') {
+      return ''
+    }
+    return ''
+  }).filter(Boolean).join('\n')
 }).filter(Boolean).join('\n')}
 
 <!-- Twitter Card Meta Tags -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${title || 'Test Page Title'}" />
-<meta name="twitter:description" content="${description || 'Test page description for OG tag generation'}" />
-${images.length > 0 && getImageUrl(images[0], true) ? `<meta name="twitter:image" content="${getImageUrl(images[0], true)}" />` : ''}`}
+<meta name="twitter:description" content="${description || 'Test page description for OG tag generation'}" />`}
                   </pre>
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -777,14 +845,30 @@ ${metaTags.map(tag => `<meta property="${tag.name}" content="${tag.value}" />`).
 <!-- Image Meta Tags -->
 ${images.map((image, index) => {
   const imageUrl = getImageUrl(image, true)
-  return imageUrl ? `<meta property="og:image" content="${imageUrl}" />` : ''
+  if (!imageUrl) return ''
+  
+  return image.tags.map(tag => {
+    if (tag === 'og:image') {
+      return `<meta property="og:image" content="${imageUrl}" />`
+    } else if (tag === 'twitter:image') {
+      return `<meta name="twitter:image" content="${imageUrl}" />`
+    } else if (tag === 'favicon') {
+      return `<link rel="icon" type="image/png" href="${imageUrl}" />`
+    } else if (tag === 'icon') {
+      return `<link rel="icon" type="image/png" href="${imageUrl}" />`
+    } else if (tag === 'apple-touch-icon') {
+      return `<link rel="apple-touch-icon" href="${imageUrl}" />`
+    } else if (tag === 'none') {
+      return ''
+    }
+    return ''
+  }).filter(Boolean).join('\n')
 }).filter(Boolean).join('\n')}
 
 <!-- Twitter Card Meta Tags -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${title || 'Test Page Title'}" />
-<meta name="twitter:description" content="${description || 'Test page description for OG tag generation'}" />
-${images.length > 0 && getImageUrl(images[0], true) ? `<meta name="twitter:image" content="${getImageUrl(images[0], true)}" />` : ''}`
+<meta name="twitter:description" content="${description || 'Test page description for OG tag generation'}" />`
 
                       await navigator.clipboard.writeText(metaHtml)
                       toast.success('Meta tags HTML copied to clipboard!')
@@ -818,12 +902,28 @@ ${images.length > 0 && getImageUrl(images[0], true) ? `<meta name="twitter:image
                           <Badge variant="outline">
                             Image {index + 1} - {image.type === 'external' ? '🔗 External' : '📷 Generated'}
                           </Badge>
-                          {image.delay > 0 && (
-                            <Badge variant="secondary">
-                              ⏱️ {image.delay}s delay
-                            </Badge>
-                          )}
+                          <div className="flex gap-1">
+                            {image.delay > 0 && (
+                              <Badge variant="secondary">
+                                ⏱️ {image.delay}s delay
+                              </Badge>
+                            )}
+                            {image.tags.length > 0 && (
+                              <Badge variant="outline">
+                                {image.tags.length} tag{image.tags.length !== 1 ? 's' : ''}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
+                        {image.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {image.tags.map((tag) => (
+                              <Badge key={tag} variant="secondary" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                         {getImageUrl(image) && (
                           <div className="space-y-2">
                             <div className="w-full h-24 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden">
