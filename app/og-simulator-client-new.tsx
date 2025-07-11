@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 
 interface ImageConfig {
@@ -20,6 +21,7 @@ interface ImageConfig {
   height?: string
   size?: string
   delay: number
+  progressiveLoad?: boolean
 }
 
 interface MetaTag {
@@ -42,10 +44,11 @@ export default function OGSimulatorClientNew() {
     const imageWidths = searchParams.getAll('image_width')
     const imageHeights = searchParams.getAll('image_height')
     const imageSizes = searchParams.getAll('image_size')
+    const imageProgressiveLoads = searchParams.getAll('image_progressive_load')
 
     if (imageUrls.length === 0 && imageTypes.length === 0) return []
 
-    const maxLength = Math.max(imageUrls.length, imageTypes.length, imageDelays.length, imageWidths.length, imageHeights.length, imageSizes.length)
+    const maxLength = Math.max(imageUrls.length, imageTypes.length, imageDelays.length, imageWidths.length, imageHeights.length, imageSizes.length, imageProgressiveLoads.length)
     const initialImages: ImageConfig[] = []
 
     for (let i = 0; i < maxLength; i++) {
@@ -55,6 +58,7 @@ export default function OGSimulatorClientNew() {
       const imageWidth = imageWidths[i] || ''
       const imageHeight = imageHeights[i] || ''
       const imageSize = imageSizes[i] || ''
+      const imageProgressiveLoad = imageProgressiveLoads[i] === 'true'
 
       if (!imageUrl && !imageWidth && !imageHeight && !imageSize && imageType !== 'generate') continue
 
@@ -65,7 +69,8 @@ export default function OGSimulatorClientNew() {
         width: imageWidth || undefined,
         height: imageHeight || undefined,
         size: imageSize || undefined,
-        delay: imageDelay
+        delay: imageDelay,
+        progressiveLoad: imageProgressiveLoad
       })
     }
     return initialImages
@@ -127,10 +132,12 @@ export default function OGSimulatorClientNew() {
         params.append('image', image.url)
         params.append('image_type', 'external')
         params.append('image_delay', image.delay.toString())
+        params.append('image_progressive_load', (image.progressiveLoad || false).toString())
       } else if (image.type === 'generate') {
         params.append('image', '') // Empty for generated images
         params.append('image_type', 'generate')
         params.append('image_delay', image.delay.toString())
+        params.append('image_progressive_load', (image.progressiveLoad || false).toString())
 
         if (image.size && image.size !== 'custom') {
           params.append('image_size', image.size)
@@ -228,12 +235,21 @@ export default function OGSimulatorClientNew() {
 
     if (image.type === 'external' && image.url) {
       if (image.delay > 0) {
-        return `${baseUrl}/api/image-proxy?url=${encodeURIComponent(image.url)}&delay=${image.delay}`
+        const params = new URLSearchParams()
+        params.set('url', image.url)
+        params.set('delay', image.delay.toString())
+        if (image.progressiveLoad) {
+          params.set('progressive', 'true')
+        }
+        return `${baseUrl}/api/image-proxy?${params.toString()}`
       }
       return absolute ? image.url : image.url
     } else if (image.type === 'generate' && (image.size || image.width || image.height)) {
       const params = new URLSearchParams()
       params.set('delay', (image.delay).toString())
+      if (image.progressiveLoad) {
+        params.set('progressive', 'true')
+      }
       if (image.size && image.size !== 'custom') {
         params.set('size', image.size)
       } else {
@@ -271,10 +287,12 @@ export default function OGSimulatorClientNew() {
         params.append('image', image.url)
         params.append('image_type', 'external')
         params.append('image_delay', image.delay.toString())
+        params.append('image_progressive_load', (image.progressiveLoad || false).toString())
       } else if (image.type === 'generate') {
         params.append('image', '') // Empty for generated images
         params.append('image_type', 'generate')
         params.append('image_delay', image.delay.toString())
+        params.append('image_progressive_load', (image.progressiveLoad || false).toString())
 
         if (image.size && image.size !== 'custom') {
           params.append('image_size', image.size)
@@ -480,6 +498,28 @@ export default function OGSimulatorClientNew() {
                           className="w-full"
                         />
                       </div>
+
+                      {/* Progressive Load Checkbox */}
+                      {image.delay > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`progressive-load-${image.id}`}
+                              checked={image.progressiveLoad}
+                              onCheckedChange={(checked) => updateImage(image.id, { progressiveLoad: checked === true })}
+                            />
+                            <Label htmlFor={`progressive-load-${image.id}`} className="text-sm">
+                              Progressive Load
+                            </Label>
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {image.progressiveLoad 
+                              ? '📡 Sends a few bytes immediately, then pauses before sending the rest'
+                              : '⏱️ Waits for the full delay before sending any data'
+                            }
+                          </div>
+                        </div>
+                      )}
 
                       {/* Image URL Preview */}
                       {getImageUrl(image) && (
@@ -818,11 +858,18 @@ ${images.length > 0 && getImageUrl(images[0], true) ? `<meta name="twitter:image
                           <Badge variant="outline">
                             Image {index + 1} - {image.type === 'external' ? '🔗 External' : '📷 Generated'}
                           </Badge>
-                          {image.delay > 0 && (
-                            <Badge variant="secondary">
-                              ⏱️ {image.delay}s delay
-                            </Badge>
-                          )}
+                          <div className="flex gap-2">
+                            {image.delay > 0 && (
+                              <Badge variant="secondary">
+                                ⏱️ {image.delay}s delay
+                              </Badge>
+                            )}
+                            {image.progressiveLoad && image.delay > 0 && (
+                              <Badge variant="default">
+                                📡 Progressive
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                         {getImageUrl(image) && (
                           <div className="space-y-2">

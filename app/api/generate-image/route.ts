@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
   const width = parseInt(searchParams.get('width') || '1200')
   const height = parseInt(searchParams.get('height') || '630')
   const delay = parseInt(searchParams.get('delay') || '0')
+  const progressive = searchParams.get('progressive') === 'true'
   const size = searchParams.get('size') // 'small', 'medium', 'large'
 
   // Handle preset sizes
@@ -30,11 +31,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Add delay if specified
-    if (delay > 0) {
-      await new Promise(resolve => setTimeout(resolve, delay * 1000))
-    }
-
     // Create gradient effect using multiple colored rectangles
     // This completely avoids SVG and fontconfig dependencies
     
@@ -139,6 +135,41 @@ export async function GET(request: NextRequest) {
 
     // Composite all elements
     const finalImage = await baseImage.composite(compositeOps).png().toBuffer()
+
+    // Progressive loading: send a few bytes immediately, then pause, then send the rest
+    if (progressive && delay > 0) {
+      const stream = new ReadableStream({
+        start(controller) {
+          const bytes = new Uint8Array(finalImage)
+          const chunkSize = Math.min(1024, bytes.length) // Send first 1KB
+          
+          // Send first chunk immediately
+          controller.enqueue(bytes.slice(0, chunkSize))
+          
+          // Then pause and send the rest
+          setTimeout(() => {
+            controller.enqueue(bytes.slice(chunkSize))
+            controller.close()
+          }, delay * 1000)
+        }
+      })
+
+      return new NextResponse(stream, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Access-Control-Allow-Origin': '*',
+        },
+      })
+    }
+
+    // Regular delay behavior: wait then send all data
+    if (delay > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay * 1000))
+    }
 
     return new NextResponse(finalImage, {
       status: 200,
