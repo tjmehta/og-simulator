@@ -1,0 +1,51 @@
+{
+  "name": "OG Simulator",
+  "short_name": "OG Simulator",
+  "description": "Open Graph image simulator and generator",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#667eea",
+  "icons": [
+    {
+      "src": "/api/generate-image?width=72&height=72",
+      "sizes": "72x72",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/generate-image?width=96&height=96",
+      "sizes": "96x96",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/generate-image?width=128&height=128",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/generate-image?width=144&height=144",
+      "sizes": "144x144",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/generate-image?width=152&height=152",
+      "sizes": "152x152",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/generate-image?width=192&height=192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/generate-image?width=384&height=384",
+      "sizes": "384x384",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/generate-image?width=512&height=512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
