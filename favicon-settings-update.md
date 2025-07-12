@@ -10,16 +10,20 @@ Each image now has a **"OG Tags"** section with checkboxes for:
 - `og:image` - Open Graph image
 - `twitter:image` - Twitter card image 
 - `favicon` - Standard favicon
-- `icon` - Generic icon (same as favicon)
 - `apple-touch-icon` - Apple touch icon for iOS devices
-- `none` - No tags (image won't appear in any meta tags)
 
 ### 2. **Smart Defaults**
 - **First image**: Automatically defaults to `og:image` and `twitter:image`
 - **Subsequent images**: Default to no tags (empty array)
 - **New images**: Default to no tags
 
-### 3. **Dynamic HTML Generation**
+### 3. **URL Parameter Support**
+The multiselect tags now work via URL query parameters, just like all other settings:
+- Added `image_tags` parameter that stores comma-separated tag names
+- Example: `?image_tags=og:image,twitter:image&image_tags=favicon`
+- Full backward compatibility with existing URLs
+
+### 4. **Dynamic HTML Generation**
 The HTML preview now generates different meta tags based on the selected options:
 
 ```html
@@ -32,14 +36,11 @@ The HTML preview now generates different meta tags based on the selected options
 <!-- For favicon -->
 <link rel="icon" type="image/png" href="[image-url]" />
 
-<!-- For icon -->
-<link rel="icon" type="image/png" href="[image-url]" />
-
 <!-- For apple-touch-icon -->
 <link rel="apple-touch-icon" href="[image-url]" />
 ```
 
-### 4. **Updated Preview Logic**
+### 5. **Updated Preview Logic**
 - **Social Media Preview**: Now shows the first image with `og:image` or `twitter:image` tags instead of always showing the first image
 - **Image Cards**: Display badge counts showing how many tags are selected
 - **Tag Indicators**: Visual badges showing which tags are assigned to each image
@@ -56,9 +57,13 @@ The HTML preview now generates different meta tags based on the selected options
 ### Example Configuration
 ```
 Image 1: og:image, twitter:image (1200x630)
-Image 2: favicon, icon (32x32)
+Image 2: favicon (32x32)
 Image 3: apple-touch-icon (180x180)
-Image 4: none (unused image)
+```
+
+### URL Structure
+```
+?image_tags=og:image,twitter:image&image_tags=favicon&image_tags=apple-touch-icon
 ```
 
 ## Technical Implementation
@@ -77,19 +82,26 @@ interface ImageConfig {
 }
 ```
 
+### URL Parameter Integration
+- **Loading**: `image_tags` parameters are parsed as comma-separated strings
+- **Saving**: Tag arrays are joined with commas for URL parameters
+- **Backward compatibility**: Empty or missing tags default to first image getting `og:image,twitter:image`
+
 ### Key Features
 - **Multiple tags per image**: One image can serve multiple purposes
 - **Flexible assignment**: Any image can be assigned any combination of tags
 - **Backward compatibility**: Existing URLs continue to work with smart defaults
 - **Live preview**: Changes immediately reflect in the HTML preview
+- **URL persistence**: All settings are saved to URL parameters
 
 ## Benefits
 
 1. **🎯 Precise Control**: Specify exactly which OG tags each image should be used for
 2. **📱 Mobile Optimized**: Support for Apple touch icons and different favicon sizes
-3. **🔄 Flexible**: One image can serve multiple purposes or be unused
+3. **🔄 Flexible**: One image can serve multiple purposes
 4. **👁️ Visual Feedback**: Clear indication of which tags are assigned to each image
 5. **🌐 SEO Friendly**: Proper favicon implementation improves site appearance in browsers
+6. **🔗 URL Shareable**: All settings persist in URL parameters for easy sharing
 
 ## Uses the Existing Infrastructure
 - **Same image generation API**: `/api/generate-image` with width/height parameters
@@ -101,9 +113,13 @@ interface ImageConfig {
 A typical configuration might look like:
 ```
 Image 1: og:image, twitter:image (1200x630 - social sharing)
-Image 2: favicon, icon (32x32 - browser favicon)
+Image 2: favicon (32x32 - browser favicon)
 Image 3: apple-touch-icon (180x180 - iOS home screen)
-Image 4: none (backup image, not used in meta tags)
 ```
 
-This gives you complete control over how your images appear across different platforms and contexts while using the same dynamic image generation system.
+**URL Example:**
+```
+?image_type=generate&image_width=1200&image_height=630&image_tags=og:image,twitter:image&image_type=generate&image_width=32&image_height=32&image_tags=favicon&image_type=generate&image_width=180&image_height=180&image_tags=apple-touch-icon
+```
+
+This gives you complete control over how your images appear across different platforms and contexts while using the same dynamic image generation system and maintaining full URL parameter compatibility.

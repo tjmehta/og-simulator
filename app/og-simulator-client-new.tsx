@@ -43,10 +43,11 @@ export default function OGSimulatorClientNew() {
     const imageWidths = searchParams.getAll('image_width')
     const imageHeights = searchParams.getAll('image_height')
     const imageSizes = searchParams.getAll('image_size')
+    const imageTags = searchParams.getAll('image_tags')
 
     if (imageUrls.length === 0 && imageTypes.length === 0) return []
 
-    const maxLength = Math.max(imageUrls.length, imageTypes.length, imageDelays.length, imageWidths.length, imageHeights.length, imageSizes.length)
+    const maxLength = Math.max(imageUrls.length, imageTypes.length, imageDelays.length, imageWidths.length, imageHeights.length, imageSizes.length, imageTags.length)
     const initialImages: ImageConfig[] = []
 
     for (let i = 0; i < maxLength; i++) {
@@ -56,6 +57,8 @@ export default function OGSimulatorClientNew() {
       const imageWidth = imageWidths[i] || ''
       const imageHeight = imageHeights[i] || ''
       const imageSize = imageSizes[i] || ''
+      const imageTagsString = imageTags[i] || ''
+      const parsedTags = imageTagsString ? imageTagsString.split(',').filter(tag => tag.trim()) : (i === 0 ? ['og:image', 'twitter:image'] : [])
 
       if (!imageUrl && !imageWidth && !imageHeight && !imageSize && imageType !== 'generate') continue
 
@@ -67,7 +70,7 @@ export default function OGSimulatorClientNew() {
         height: imageHeight || undefined,
         size: imageSize || undefined,
         delay: imageDelay,
-        tags: i === 0 ? ['og:image', 'twitter:image'] : []
+        tags: parsedTags
       })
     }
     return initialImages
@@ -129,10 +132,12 @@ export default function OGSimulatorClientNew() {
         params.append('image', image.url)
         params.append('image_type', 'external')
         params.append('image_delay', image.delay.toString())
+        params.append('image_tags', image.tags.join(','))
       } else if (image.type === 'generate') {
         params.append('image', '') // Empty for generated images
         params.append('image_type', 'generate')
         params.append('image_delay', image.delay.toString())
+        params.append('image_tags', image.tags.join(','))
 
         if (image.size && image.size !== 'custom') {
           params.append('image_size', image.size)
@@ -274,10 +279,12 @@ export default function OGSimulatorClientNew() {
         params.append('image', image.url)
         params.append('image_type', 'external')
         params.append('image_delay', image.delay.toString())
+        params.append('image_tags', image.tags.join(','))
       } else if (image.type === 'generate') {
         params.append('image', '') // Empty for generated images
         params.append('image_type', 'generate')
         params.append('image_delay', image.delay.toString())
+        params.append('image_tags', image.tags.join(','))
 
         if (image.size && image.size !== 'custom') {
           params.append('image_size', image.size)
@@ -493,9 +500,7 @@ export default function OGSimulatorClientNew() {
                               { value: 'og:image', label: 'og:image' },
                               { value: 'twitter:image', label: 'twitter:image' },
                               { value: 'favicon', label: 'favicon' },
-                              { value: 'icon', label: 'icon' },
-                              { value: 'apple-touch-icon', label: 'apple-touch-icon' },
-                              { value: 'none', label: 'none' }
+                              { value: 'apple-touch-icon', label: 'apple-touch-icon' }
                             ].map((option) => (
                               <div key={option.value} className="flex items-center space-x-2">
                                 <input
@@ -817,12 +822,8 @@ ${images.map((image, index) => {
       return `<meta name="twitter:image" content="${imageUrl}" />`
     } else if (tag === 'favicon') {
       return `<link rel="icon" type="image/png" href="${imageUrl}" />`
-    } else if (tag === 'icon') {
-      return `<link rel="icon" type="image/png" href="${imageUrl}" />`
     } else if (tag === 'apple-touch-icon') {
       return `<link rel="apple-touch-icon" href="${imageUrl}" />`
-    } else if (tag === 'none') {
-      return ''
     }
     return ''
   }).filter(Boolean).join('\n')
@@ -854,12 +855,8 @@ ${images.map((image, index) => {
       return `<meta name="twitter:image" content="${imageUrl}" />`
     } else if (tag === 'favicon') {
       return `<link rel="icon" type="image/png" href="${imageUrl}" />`
-    } else if (tag === 'icon') {
-      return `<link rel="icon" type="image/png" href="${imageUrl}" />`
     } else if (tag === 'apple-touch-icon') {
       return `<link rel="apple-touch-icon" href="${imageUrl}" />`
-    } else if (tag === 'none') {
-      return ''
     }
     return ''
   }).filter(Boolean).join('\n')
