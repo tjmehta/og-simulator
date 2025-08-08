@@ -695,30 +695,34 @@ export default function OGSimulatorClientNew() {
                   Social Media Preview
                 </CardTitle>
                 <CardDescription>
-                  How your content will appear when shared (first image)
+                  How your content will appear when shared (first valid image)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="border rounded-lg p-4 bg-white dark:bg-gray-800 space-y-3">
-                  {images.length > 0 && getImageUrl(images[0]) && (
-                    <div className="w-full h-48 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden">
-                      <img
-                        src={getImageUrl(images[0]) || ''}
-                        alt="OG Image"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none'
-                          const nextElement = e.currentTarget.nextElementSibling as HTMLElement
-                          if (nextElement) {
-                            nextElement.style.display = 'flex'
-                          }
-                        }}
-                      />
-                      <div className="hidden w-full h-full bg-gray-200 dark:bg-gray-700 items-center justify-center text-gray-500">
-                        Image not found
+                  {(() => {
+                    const firstValidImage = images.find((img) => getImageUrl(img))
+                    const firstValidUrl = firstValidImage ? getImageUrl(firstValidImage) : null
+                    return firstValidUrl ? (
+                      <div className="w-full h-48 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center overflow-hidden">
+                        <img
+                          src={firstValidUrl || ''}
+                          alt="OG Image"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                            const nextElement = e.currentTarget.nextElementSibling as HTMLElement
+                            if (nextElement) {
+                              nextElement.style.display = 'flex'
+                            }
+                          }}
+                        />
+                        <div className="hidden w-full h-full bg-gray-200 dark:bg-gray-700 items-center justify-center text-gray-500">
+                          Image not found
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ) : null
+                  })()}
                   <div>
                     <div className="font-semibold text-blue-600 dark:text-blue-400 text-sm mb-1">
                       {metaTags.find(tag => tag.name === 'og:site_name')?.value || 'No site name'}
@@ -748,7 +752,10 @@ export default function OGSimulatorClientNew() {
               <CardContent>
                 <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
                   <pre className="whitespace-pre-wrap">
-{`<!-- Basic Meta Tags -->
+{(() => {
+  const firstValidImage = images.find((img) => getImageUrl(img, true))
+  const firstValidUrlAbs = firstValidImage ? getImageUrl(firstValidImage, true) : ''
+  return `<!-- Basic Meta Tags -->
 <meta property="og:title" content="${title || 'Test Page Title'}" />
 <meta property="og:description" content="${description || 'Test page description for OG tag generation'}" />
 ${metaTags.map(tag => `<meta property="${tag.name}" content="${tag.value}" />`).join('\n')}
@@ -763,12 +770,15 @@ ${images.map((image, index) => {
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${title || 'Test Page Title'}" />
 <meta name="twitter:description" content="${description || 'Test page description for OG tag generation'}" />
-${images.length > 0 && getImageUrl(images[0], true) ? `<meta name="twitter:image" content="${getImageUrl(images[0], true)}" />` : ''}`}
+${firstValidUrlAbs ? `<meta name="twitter:image" content="${firstValidUrlAbs}" />` : ''}`
+})()}
                   </pre>
                 </div>
                 <div className="mt-3 flex gap-2">
                   <Button
                     onClick={async () => {
+                      const firstValidImage = images.find((img) => getImageUrl(img, true))
+                      const firstValidUrlAbs = firstValidImage ? getImageUrl(firstValidImage, true) : ''
                       const metaHtml = `<!-- Basic Meta Tags -->
 <meta property="og:title" content="${title || 'Test Page Title'}" />
 <meta property="og:description" content="${description || 'Test page description for OG tag generation'}" />
@@ -784,7 +794,7 @@ ${images.map((image, index) => {
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${title || 'Test Page Title'}" />
 <meta name="twitter:description" content="${description || 'Test page description for OG tag generation'}" />
-${images.length > 0 && getImageUrl(images[0], true) ? `<meta name="twitter:image" content="${getImageUrl(images[0], true)}" />` : ''}`
+${firstValidUrlAbs ? `<meta name="twitter:image" content="${firstValidUrlAbs}" />` : ''}`
 
                       await navigator.clipboard.writeText(metaHtml)
                       toast.success('Meta tags HTML copied to clipboard!')
