@@ -79,11 +79,11 @@ export async function generateMetadata({ searchParams }: {
 
     if (imageUrl && imageType === 'external') {
       // External image with proxy
-      finalImageUrl = `${baseUrl}/api/image-proxy?url=${encodeURIComponent(imageUrl)}&delay=${parseInt(imageDelay) * 1000}`
+      finalImageUrl = `${baseUrl}/api/image-proxy?url=${encodeURIComponent(imageUrl)}&delay=${parseInt(imageDelay)}`
     } else if (imageType === 'generate' || imageSize || imageWidth || imageHeight) {
       // Generated image
       const imgParams = new URLSearchParams()
-      imgParams.set('delay', (parseInt(imageDelay) * 1000).toString())
+      imgParams.set('delay', parseInt(imageDelay).toString())
       if (imageSize && imageSize !== 'custom') {
         imgParams.set('size', imageSize)
       } else {
