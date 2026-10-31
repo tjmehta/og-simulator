@@ -3,6 +3,15 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "https://og-simulator.vercel.app/",
+  },
+  verification: {
+    google: "HvFDWSd3kliYrpvnQdZzVyNv8wb9ofXgxdJfuk0qlNk",
+  },
+};
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
